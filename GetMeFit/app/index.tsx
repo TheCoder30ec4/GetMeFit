@@ -19,7 +19,7 @@ export default function SplashScreen() {
 
   return (
     <View className="flex-1 bg-primary-dark items-center justify-center">
-      <Text variant="h1" className="text-primary-green">
+      <Text variant="h1" className="text-primary-green italic">
         GetMeFit
       </Text>
       <Text variant="muted" className="mt-2">

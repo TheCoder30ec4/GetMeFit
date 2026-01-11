@@ -99,7 +99,7 @@ export default function ProfileScreen() {
             className="w-full"
           />
           <Text variant="tiny" className="text-gray-500 text-center mt-4">
-            GetMeFit v1.0.0
+            <Text className="italic">GetMeFit</Text> v1.0.0
           </Text>
         </View>
       </ScrollView>

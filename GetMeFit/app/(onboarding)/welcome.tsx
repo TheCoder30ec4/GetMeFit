@@ -16,7 +16,7 @@ export default function WelcomeScreen() {
         
         <Text variant="h1" className="text-center mb-4">
           Welcome to{'\n'}
-          <Text className="text-primary-green">GetMeFit</Text>
+          <Text className="text-primary-green italic">GetMeFit</Text>
         </Text>
         
         <Text variant="body" className="text-gray-400 text-center px-8">
