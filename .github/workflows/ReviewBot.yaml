@@ -20,9 +20,25 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }} 
         run: |
           echo "Triggering code review for pr: $PR_URL"
+          
+          # Debug secret (GitHub will mask the actual value)
+          if [ -z "$REVIEW_API_BASE_URL" ]; then
+            echo "ERROR: REVIEW_API_BASE_URL secret is not set!"
+            exit 1
+          fi
+          
+          echo "API Base URL is set (length: ${#REVIEW_API_BASE_URL} characters)"
           echo "API Base URL: $REVIEW_API_BASE_URL"
+          
+          # Construct full endpoint URL
+          ENDPOINT_URL="$REVIEW_API_BASE_URL/review"
+          echo "Full endpoint URL: $ENDPOINT_URL"
+          echo "Request payload: {\"pr_url\": \"$PR_URL\"}"
 
-          http_code=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "$REVIEW_API_BASE_URL/review" \
+          echo "Making POST request to: $ENDPOINT_URL"
+          echo "Note: GitHub will mask secrets in the URL above"
+          
+          http_code=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "$ENDPOINT_URL" \
             -H "Content-Type: application/json" \
             -d "{\"pr_url\": \"$PR_URL\"}")
 
