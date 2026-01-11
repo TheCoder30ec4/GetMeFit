@@ -7,6 +7,9 @@ on:
 
 jobs:
   code-review:
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +34,7 @@ jobs:
             exit 1
           fi 
 
-          echo "Session ID: $session_id" >> $GITHUB_OUTPUT
+          echo "session_id=$session_id" >> $GITHUB_OUTPUT
 
       - name: Poll review status
         env:
@@ -45,7 +48,7 @@ jobs:
           COUNT=0
 
           while [ $COUNT -lt $MAX_RETRIES ]; do
-            response=$(curl -s -X GET "$REVIEW_API_BASEURL/review/$SESSION_ID" \
+            response=$(curl -s -X GET "$REVIEW_API_BASE_URL/review/$SESSION_ID" \
               -H "Content-Type: application/json")
 
               status=$(echo "$response" | jq -r '.status')
@@ -57,7 +60,7 @@ jobs:
                 exit 0 
               fi 
 
-              if ["$status" == "failed" ]; then
+              if [ "$status" == "failed" ]; then
                 echo "Code Review failed: $error"
                 exit 1
               fi 
