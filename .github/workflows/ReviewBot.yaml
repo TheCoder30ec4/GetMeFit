@@ -22,7 +22,7 @@ jobs:
           echo "Triggering code review for pr: $PR_URL"
 
           response=$(curl -s -X POST "$REVIEW_API_BASE_URL/review" \
-            -H "Content-Type: application/json" \ 
+            -H "Content-Type: application/json" \
             -d "{\"pr_url\": \"$PR_URL\"}")
 
           echo "Response: $response"
