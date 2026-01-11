@@ -2,7 +2,7 @@ name: Automated Review Bot
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
 
 
 jobs:
@@ -20,20 +20,48 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }} 
         run: |
           echo "Triggering code review for pr: $PR_URL"
+          
+          # Debug secret (GitHub will mask the actual value)
+          if [ -z "$REVIEW_API_BASE_URL" ]; then
+            echo "ERROR: REVIEW_API_BASE_URL secret is not set!"
+            exit 1
+          fi
+          
+          echo "API Base URL is set (length: ${#REVIEW_API_BASE_URL} characters)"
+          echo "API Base URL: $REVIEW_API_BASE_URL"
+          
+          # Construct full endpoint URL
+          ENDPOINT_URL="$REVIEW_API_BASE_URL/review"
+          echo "Full endpoint URL: $ENDPOINT_URL"
+          echo "Request payload: {\"pr_url\": \"$PR_URL\"}"
 
-          response=$(curl -s -X POST "$REVIEW_API_BASE_URL/review" \
-            -H "Content-Type: application/json" \ 
+          echo "Making POST request to: $ENDPOINT_URL"
+          echo "Note: GitHub will mask secrets in the URL above"
+          
+          http_code=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST "$ENDPOINT_URL" \
+            -H "Content-Type: application/json" \
             -d "{\"pr_url\": \"$PR_URL\"}")
 
+          response=$(cat /tmp/response.json)
+          echo "HTTP Status Code: $http_code"
           echo "Response: $response"
+
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
+            echo "Error: API returned status code $http_code"
+            error_detail=$(echo "$response" | jq -r '.detail // .error // .message // "Unknown error"')
+            echo "Error detail: $error_detail"
+            exit 1
+          fi
 
           session_id=$(echo "$response" | jq -r '.session_id')
 
           if [ "$session_id" == "null" ] || [ -z "$session_id" ]; then 
-            echo "Failed to get session_id"
+            echo "Error: Failed to get session_id from response"
+            echo "Response was: $response"
             exit 1
           fi 
 
+          echo "Session ID: $session_id"
           echo "session_id=$session_id" >> $GITHUB_OUTPUT
 
       - name: Poll review status
@@ -48,26 +76,34 @@ jobs:
           COUNT=0
 
           while [ $COUNT -lt $MAX_RETRIES ]; do
-            response=$(curl -s -X GET "$REVIEW_API_BASE_URL/review/$SESSION_ID" \
+            http_code=$(curl -s -o /tmp/poll_response.json -w "%{http_code}" -X GET "$REVIEW_API_BASE_URL/review/$SESSION_ID" \
               -H "Content-Type: application/json")
 
-              status=$(echo "$response" | jq -r '.status')
+            response=$(cat /tmp/poll_response.json)
+            status=$(echo "$response" | jq -r '.status // "unknown"')
 
-              echo "Current status: $status"
+            echo "Current status: $status (HTTP $http_code)"
 
-              if [ "$status" == "completed" ]; then
-                echo "Code review completed successfully"
-                exit 0 
-              fi 
+            if [ "$http_code" != "200" ]; then
+              echo "Warning: API returned status code $http_code"
+              error_detail=$(echo "$response" | jq -r '.detail // .error // .message // "Unknown error"')
+              echo "Error detail: $error_detail"
+            fi
 
-              if [ "$status" == "failed" ]; then
-                echo "Code Review failed: $error"
-                exit 1
-              fi 
+            if [ "$status" == "completed" ]; then
+              echo "Code review completed successfully"
+              exit 0 
+            fi 
 
-              COUNT=$((COUNT + 1))
-              echo "Waiting for review... ($COUNT/$MAX_RETRIES)"
-              sleep $SLEEP_SECONDS
+            if [ "$status" == "failed" ]; then
+              error_msg=$(echo "$response" | jq -r '.error // .message // "Unknown error"')
+              echo "Code Review failed: $error_msg"
+              exit 1
+            fi 
+
+            COUNT=$((COUNT + 1))
+            echo "Waiting for review... ($COUNT/$MAX_RETRIES)"
+            sleep $SLEEP_SECONDS
           done
 
           echo "Code review timed out after $MAX_RETRIES attempts"
