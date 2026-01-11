@@ -1,0 +1,71 @@
+name: Automated Review Bot
+
+on:
+  pull_request:
+    types: [opened]
+
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Code review
+        id: trigger-review 
+        env: 
+          REVIEW_API_BASE_URL: ${{ secrets.REVIEW_API_BASE_URL }}
+          PR_URL: ${{ github.event.pull_request.html_url }} 
+        run: |
+          echo "Triggering code review for pr: $PR_URL"
+
+          response=$(curl -s -X POST "$REVIEW_API_BASE_URL/review" \
+            -H "Content-Type: application/json" \ 
+            -d "{\"pr_url\": \"$PR_URL\"}")
+
+          echo "Response: $response"
+
+          session_id=$(echo "$response" | jq -r '.session_id')
+
+          if [ "$session_id" == "null" ] || [ -z "$session_id" ]; then 
+            echo "Failed to get session_id"
+            exit 1
+          fi 
+
+          echo "Session ID: $session_id" >> $GITHUB_OUTPUT
+
+      - name: Poll review status
+        env:
+          REVIEW_API_BASE_URL: ${{ secrets.REVIEW_API_BASE_URL }}
+          SESSION_ID: ${{ steps.trigger-review.outputs.session_id }}
+        run: |
+          echo "Polling review status for session: $SESSION_ID"
+
+          MAX_RETRIES=10
+          SLEEP_SECONDS=20
+          COUNT=0
+
+          while [ $COUNT -lt $MAX_RETRIES ]; do
+            response=$(curl -s -X GET "$REVIEW_API_BASEURL/review/$SESSION_ID" \
+              -H "Content-Type: application/json")
+
+              status=$(echo "$response" | jq -r '.status')
+
+              echo "Current status: $status"
+
+              if [ "$status" == "completed" ]; then
+                echo "Code review completed successfully"
+                exit 0 
+              fi 
+
+              if ["$status" == "failed" ]; then
+                echo "Code Review failed: $error"
+                exit 1
+              fi 
+
+              COUNT=$((COUNT + 1))
+              echo "Waiting for review... ($COUNT/$MAX_RETRIES)"
+              sleep $SLEEP_SECONDS
+          done
+
+          echo "Code review timed out after $MAX_RETRIES attempts"
+          exit 1
